@@ -1,163 +1,66 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Pro VR Chemistry Lab - Color & Grab Fix</title>
+    <title>Pro VR Chemistry Lab - 32 Chemicals & Explosions</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.2/dist/aframe-physics-system.min.js"></script>
+    <script src="https://unpkg.com/super-hands@3.0.3/dist/super-hands.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
 
     <script>
-      // === 1. FOOLPROOF VR GRABBER ===
-      AFRAME.registerComponent('vr-grabber', {
-        init: function() {
-            this.grabbedEl = null;
-            this.el.addEventListener('gripdown', this.grab.bind(this));
-            this.el.addEventListener('gripup', this.drop.bind(this));
-            this.el.addEventListener('triggerdown', this.grab.bind(this));
-            this.el.addEventListener('triggerup', this.drop.bind(this));
-        },
-        grab: function() {
-            if (this.grabbedEl) return;
-            let handPos = new THREE.Vector3();
-            this.el.object3D.getWorldPosition(handPos);
-            
-            let chems = document.querySelectorAll('.chemical');
-            let closest = null;
-            let minDist = 0.25; // 25cm Catch Radius
-            
-            chems.forEach(chem => {
-                let chemPos = new THREE.Vector3();
-                chem.object3D.getWorldPosition(chemPos);
-                let dist = handPos.distanceTo(chemPos);
-                if(dist < minDist) {
-                    minDist = dist;
-                    closest = chem;
-                }
-            });
-            
-            if (closest) {
-                this.grabbedEl = closest;
-                this.grabbedEl.removeAttribute('dynamic-body'); 
-            }
-        },
-        drop: function() {
-            if (this.grabbedEl) {
-                this.grabbedEl.setAttribute('dynamic-body', 'shape: cylinder; mass: 0.2');
-                this.grabbedEl = null;
-            }
-        },
-        tick: function() {
-            if (this.grabbedEl && this.grabbedEl.object3D) {
-                let handPos = new THREE.Vector3();
-                this.el.object3D.getWorldPosition(handPos);
-                let handRot = new THREE.Euler();
-                this.el.object3D.getWorldRotation(handRot);
-                
-                this.grabbedEl.object3D.position.copy(handPos);
-                this.grabbedEl.object3D.rotation.copy(handRot);
-            }
-        }
-      });
-
-      // === 2. PC MOUSE GRABBER ===
-      AFRAME.registerComponent('mouse-grabber', {
-        init: function() {
-            this.grabbedEl = null;
-            this.raycaster = this.el.components.raycaster;
-            
-            window.addEventListener('mousedown', () => {
-                if (this.grabbedEl) return;
-                let intersected = this.raycaster.intersectedEls;
-                if (intersected.length > 0 && intersected[0].classList.contains('chemical')) {
-                    this.grabbedEl = intersected[0];
-                    this.grabbedEl.removeAttribute('dynamic-body');
-                }
-            });
-            
-            window.addEventListener('mouseup', () => {
-                if (this.grabbedEl) {
-                    this.grabbedEl.setAttribute('dynamic-body', 'shape: cylinder; mass: 0.2');
-                    this.grabbedEl = null;
-                }
-            });
-        },
-        tick: function() {
-            if(this.grabbedEl && this.grabbedEl.object3D) {
-                let cam = document.querySelector('a-camera').object3D;
-                let direction = new THREE.Vector3(0, -0.2, -0.6); 
-                direction.applyQuaternion(cam.quaternion);
-                let targetPos = cam.position.clone().add(direction);
-                
-                this.grabbedEl.object3D.position.copy(targetPos);
-                this.grabbedEl.object3D.rotation.copy(cam.rotation);
-            }
-        }
-      });
-
-      // === 3. REACTION ENGINE ===
+      // === REACTION LOGIC ENGINE ===
       AFRAME.registerComponent('chemical-reaction', {
         init: function () {
-          this.isReacting = false; 
-        },
-        tick: function () {
-            if (this.isReacting || !this.el.parentNode) return;
-            
-            let myPos = new THREE.Vector3();
-            this.el.object3D.getWorldPosition(myPos);
-            
-            let others = document.querySelectorAll('.chemical');
-            for (let i = 0; i < others.length; i++) {
-                let otherEl = others[i];
-                if (otherEl === this.el) continue;
-                if (otherEl.components['chemical-reaction'].isReacting) continue;
-                
-                let otherPos = new THREE.Vector3();
-                otherEl.object3D.getWorldPosition(otherPos);
-                
-                if (myPos.distanceTo(otherPos) < 0.15) { 
-                   this.triggerReaction(otherEl);
-                   break;
-                }
-            }
-        },
-        triggerReaction: function(otherEl) {
-            this.isReacting = true;
-            otherEl.components['chemical-reaction'].isReacting = true;
-            
+          this.isReacting = false; // Prevent multiple triggers at once
+
+          this.el.addEventListener('collide', (e) => {
+            let otherEl = e.detail.body.el;
+            if (!otherEl || !otherEl.hasAttribute('chemical-reaction')) return;
+            if (this.isReacting || otherEl.components['chemical-reaction'].isReacting) return;
+
             let myType = this.el.getAttribute('data-chem-type');
             let otherType = otherEl.getAttribute('data-chem-type');
 
+            // Lock objects during reaction
+            this.isReacting = true;
+            otherEl.components['chemical-reaction'].isReacting = true;
+
+            // --- REACTION FORMULAS ---
+            
+            // 1. Sodium + Water = EXPLOSION
             if ((myType === 'sodium' && otherType === 'water') || (otherType === 'sodium' && myType === 'water')) {
-              this.doExplosion();
-              if (otherEl.parentNode) otherEl.parentNode.removeChild(otherEl); 
+              this.triggerExplosion();
+              otherEl.parentNode.removeChild(otherEl); // Destroy second beaker
             } 
+            // 2. Acid + Base = Neutralize (Glow White)
             else if ((myType === 'acid' && otherType === 'base') || (otherType === 'acid' && myType === 'base')) {
-              this.changeColor('#FFFFFF', true);
-              otherEl.components['chemical-reaction'].changeColor('#FFFFFF', true);
+              this.changeLiquidColor('#FFFFFF', true);
+              otherEl.components['chemical-reaction'].changeLiquidColor('#FFFFFF', true);
             }
+            // 3. Magic + Anything = Rainbow Disco
             else if (myType === 'magic' || otherType === 'magic') {
               this.makeRainbow();
               otherEl.components['chemical-reaction'].makeRainbow();
             }
+            // 4. Default: Color Mixing (Randomized new color)
             else {
               let randomColor = '#' + Math.floor(Math.random()*16777215).toString(16);
-              this.changeColor(randomColor, false);
+              this.changeLiquidColor(randomColor, false);
             }
 
-            setTimeout(() => { 
-                this.isReacting = false; 
-                if(otherEl && otherEl.components) otherEl.components['chemical-reaction'].isReacting = false; 
-            }, 1000);
+            // Cooldown before next reaction
+            setTimeout(() => { this.isReacting = false; if(otherEl) otherEl.components['chemical-reaction'].isReacting = false; }, 1000);
+          });
         },
-        changeColor: function(newColor, glow) {
+
+        changeLiquidColor: function(newColor, glow) {
           let liquid = this.el.querySelector('.liquid');
           if(liquid) {
-            if(glow) {
-                liquid.setAttribute('material', `color: ${newColor}; emissive: ${newColor}; emissiveIntensity: 0.8; opacity: 0.95`);
-            } else {
-                liquid.setAttribute('material', `color: ${newColor}; opacity: 0.95`);
-            }
+            liquid.setAttribute('color', newColor);
+            if(glow) liquid.setAttribute('material', `emissive: ${newColor}; emissiveIntensity: 0.8`);
           }
         },
+
         makeRainbow: function() {
           let liquid = this.el.querySelector('.liquid');
           if(liquid) {
@@ -165,75 +68,74 @@
             liquid.setAttribute('material', 'emissive: #FF00FF; emissiveIntensity: 0.5');
           }
         },
-        doExplosion: function() {
+
+        triggerExplosion: function() {
+          // Blast Sphere
           let blast = document.createElement('a-sphere');
           blast.setAttribute('position', this.el.getAttribute('position'));
           blast.setAttribute('color', '#FF4500');
           blast.setAttribute('material', 'emissive: #FF0000; emissiveIntensity: 1');
+          
+          // Blast Animation (Expands and fades out)
           blast.setAttribute('animation__scale', 'property: scale; to: 8 8 8; dur: 300; easing: easeOutQuad');
           blast.setAttribute('animation__fade', 'property: material.opacity; to: 0; dur: 300; easing: easeOutQuad');
           
           this.el.sceneEl.appendChild(blast);
+
+          // Remove Blast and the Beaker after half a second
           setTimeout(() => { if (blast.parentNode) blast.parentNode.removeChild(blast); }, 300);
           if (this.el.parentNode) this.el.parentNode.removeChild(this.el);
         }
       });
 
-      // === 4. CHEMICAL SPAWNER (FIXED FOR COLORS) ===
+      // === SPAWNER ENGINE (Creates 32 Chemicals automatically) ===
       AFRAME.registerComponent('chemical-spawner', {
         init: function () {
           const tableXPositions = [-4.5, -1.5, 1.5, 4.5];
+          
+          // Library of chemicals with their types and colors
           const chemLibrary = [
-            { type: 'sodium', name: 'Sodium', color: '#C0C0C0' }, 
-            { type: 'water', name: 'Water', color: '#00BFFF' },  
-            { type: 'acid', name: 'Acid', color: '#32CD32' },   
-            { type: 'base', name: 'Base', color: '#FF1493' },   
-            { type: 'magic', name: 'Magic', color: '#8A2BE2' },  
-            { type: 'dye_red', name: 'Red Dye', color: '#FF0000' },
-            { type: 'dye_yellow', name: 'Yellow Dye', color: '#FFD700' },
-            { type: 'dye_cyan', name: 'Cyan Dye', color: '#00FFFF' }
+            { type: 'sodium', color: '#C0C0C0' }, // Silver
+            { type: 'water', color: '#00BFFF' },  // Light Blue
+            { type: 'acid', color: '#32CD32' },   // Green
+            { type: 'base', color: '#FF1493' },   // Deep Pink
+            { type: 'magic', color: '#8A2BE2' },  // Purple
+            { type: 'dye_red', color: '#FF0000' },
+            { type: 'dye_yellow', color: '#FFD700' },
+            { type: 'dye_cyan', color: '#00FFFF' }
           ];
 
           let count = 0;
+
+          // Loop over 4 tables
           for (let t = 0; t < 4; t++) {
             let tableCenterX = tableXPositions[t];
-            let zOffsets = [-3.2, -2.8]; 
-            let xOffsets = [-0.6, -0.2, 0.2, 0.6]; 
+            
+            // Loop 8 places on each table
+            let zOffsets = [-3.2, -2.8]; // Two rows
+            let xOffsets = [-0.6, -0.2, 0.2, 0.6]; // Four columns
 
             for(let row of zOffsets) {
               for(let col of xOffsets) {
                 let chemData = chemLibrary[count % chemLibrary.length];
                 
-                // MAIN BEAKER (Geometry added back here!)
                 let beaker = document.createElement('a-entity');
+                beaker.setAttribute('mixin', 'pro-beaker');
                 beaker.setAttribute('position', `${tableCenterX + col} 1.3 ${row}`);
-                beaker.setAttribute('geometry', 'primitive: cylinder; radius: 0.12; height: 0.3');
-                beaker.setAttribute('material', 'color: #ffffff; opacity: 0.2; transparent: true; metalness: 0.3; roughness: 0.2');
                 beaker.setAttribute('data-chem-type', chemData.type);
                 beaker.setAttribute('chemical-reaction', '');
-                beaker.setAttribute('class', 'chemical');
-                beaker.setAttribute('dynamic-body', 'shape: cylinder; mass: 0.2'); 
 
-                // THE BRIGHT LIQUID (Fixed styling)
                 let liquid = document.createElement('a-cylinder');
                 liquid.setAttribute('class', 'liquid');
                 liquid.setAttribute('position', '0 -0.05 0');
                 liquid.setAttribute('radius', '0.11');
                 liquid.setAttribute('height', '0.2');
-                liquid.setAttribute('material', `color: ${chemData.color}; opacity: 0.95; transparent: false`);
-                beaker.appendChild(liquid);
-
-                // TEXT LABEL
-                let label = document.createElement('a-text');
-                label.setAttribute('value', chemData.name);
-                label.setAttribute('position', '0 0.25 0'); 
-                label.setAttribute('align', 'center');
-                label.setAttribute('color', '#000000'); 
-                label.setAttribute('scale', '0.4 0.4 0.4');
-                label.setAttribute('side', 'double');
-                beaker.appendChild(label);
+                liquid.setAttribute('color', chemData.color);
+                liquid.setAttribute('opacity', '0.9');
                 
+                beaker.appendChild(liquid);
                 this.el.sceneEl.appendChild(beaker);
+                
                 count++;
               }
             }
@@ -244,8 +146,17 @@
   </head>
   
   <body>
-    <a-scene chemical-spawner physics="debug: false; gravity: -5" renderer="antialias: true; colorManagement: true;">
+    <a-scene chemical-spawner physics="debug: false; gravity: -9.8" renderer="antialias: true; colorManagement: true;">
       
+      <a-assets>
+        <a-mixin id="pro-beaker" 
+                 geometry="primitive: cylinder; radius: 0.12; height: 0.3" 
+                 material="color: #ffffff; opacity: 0.3; transparent: true; metalness: 0.8; roughness: 0.1" 
+                 hoverable grabbable stretchable draggable droppable 
+                 dynamic-body="shape: cylinder; mass: 1" 
+                 shadow="cast: true"></a-mixin>
+      </a-assets>
+
       <a-plane position="0 0 0" rotation="-90 0 0" width="20" height="20" color="#B0BEC5" static-body></a-plane>
       <a-plane position="0 5 0" rotation="90 0 0" width="20" height="20" color="#FFFFFF"></a-plane>
       <a-plane position="0 2.5 -6" width="20" height="5" color="#87CEEB" static-body></a-plane>
@@ -258,16 +169,15 @@
       <a-box position="1.5 0.5 -3" width="2" height="1" depth="1.5" color="#111111" static-body></a-box>
       <a-box position="4.5 0.5 -3" width="2" height="1" depth="1.5" color="#111111" static-body></a-box>
 
-      <a-entity light="type: ambient; color: #FFF; intensity: 0.9"></a-entity>
-      <a-entity light="type: point; color: #FFF; intensity: 0.7; distance: 20" position="0 4 -2"></a-entity>
+      <a-entity light="type: ambient; color: #FFF; intensity: 0.6"></a-entity>
+      <a-entity light="type: point; color: #FFF; intensity: 0.6; distance: 20" position="0 4 -2"></a-entity>
 
-      <a-entity id="rig" movement-controls position="0 0 0">
+      <a-entity id="rig" movement-controls kinematic-body position="0 0 0">
         <a-camera position="0 1.6 0" look-controls>
-          <a-entity cursor="rayOrigin: mouse" raycaster="objects: .chemical" mouse-grabber></a-entity>
+          <a-cursor raycaster="objects: [hoverable]" color="#FFF"></a-cursor>
         </a-camera>
-        
-        <a-entity hand-controls="hand: left; handModelStyle: lowPoly;" vr-grabber></a-entity>
-        <a-entity hand-controls="hand: right; handModelStyle: lowPoly;" vr-grabber></a-entity>
+        <a-entity sphere-collider="objects: [hoverable]" super-hands hand-controls="hand: left"></a-entity>
+        <a-entity sphere-collider="objects: [hoverable]" super-hands hand-controls="hand: right"></a-entity>
       </a-entity>
       
     </a-scene>
