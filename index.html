@@ -1,36 +1,37 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Pro VR Chemistry Lab - 32 Chemicals & Explosions</title>
+    <title>Pro VR Chemistry Lab - Final Edition</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.2/dist/aframe-physics-system.min.js"></script>
-    <script src="https://unpkg.com/super-hands@3.0.3/dist/super-hands.min.js"></script>
+    <script src="https://unpkg.com/super-hands@3.0.4/dist/super-hands.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
 
     <script>
       // === REACTION LOGIC ENGINE ===
       AFRAME.registerComponent('chemical-reaction', {
         init: function () {
-          this.isReacting = false; // Prevent multiple triggers at once
+          this.isReacting = false; 
 
           this.el.addEventListener('collide', (e) => {
             let otherEl = e.detail.body.el;
+            // Ignore collisions with tables or walls
             if (!otherEl || !otherEl.hasAttribute('chemical-reaction')) return;
             if (this.isReacting || otherEl.components['chemical-reaction'].isReacting) return;
 
             let myType = this.el.getAttribute('data-chem-type');
             let otherType = otherEl.getAttribute('data-chem-type');
 
-            // Lock objects during reaction
+            // Lock the beakers so they don't trigger 10 times in a second
             this.isReacting = true;
             otherEl.components['chemical-reaction'].isReacting = true;
 
-            // --- REACTION FORMULAS ---
+            // --- THE EXPERIMENTS ---
             
             // 1. Sodium + Water = EXPLOSION
             if ((myType === 'sodium' && otherType === 'water') || (otherType === 'sodium' && myType === 'water')) {
               this.triggerExplosion();
-              otherEl.parentNode.removeChild(otherEl); // Destroy second beaker
+              if (otherEl.parentNode) otherEl.parentNode.removeChild(otherEl); 
             } 
             // 2. Acid + Base = Neutralize (Glow White)
             else if ((myType === 'acid' && otherType === 'base') || (otherType === 'acid' && myType === 'base')) {
@@ -42,14 +43,17 @@
               this.makeRainbow();
               otherEl.components['chemical-reaction'].makeRainbow();
             }
-            // 4. Default: Color Mixing (Randomized new color)
+            // 4. Default: Color Mixing (Random new color)
             else {
               let randomColor = '#' + Math.floor(Math.random()*16777215).toString(16);
               this.changeLiquidColor(randomColor, false);
             }
 
-            // Cooldown before next reaction
-            setTimeout(() => { this.isReacting = false; if(otherEl) otherEl.components['chemical-reaction'].isReacting = false; }, 1000);
+            // Cooldown before they can react again
+            setTimeout(() => { 
+                this.isReacting = false; 
+                if(otherEl && otherEl.components) otherEl.components['chemical-reaction'].isReacting = false; 
+            }, 1000);
           });
         },
 
@@ -70,50 +74,44 @@
         },
 
         triggerExplosion: function() {
-          // Blast Sphere
           let blast = document.createElement('a-sphere');
           blast.setAttribute('position', this.el.getAttribute('position'));
           blast.setAttribute('color', '#FF4500');
           blast.setAttribute('material', 'emissive: #FF0000; emissiveIntensity: 1');
           
-          // Blast Animation (Expands and fades out)
           blast.setAttribute('animation__scale', 'property: scale; to: 8 8 8; dur: 300; easing: easeOutQuad');
           blast.setAttribute('animation__fade', 'property: material.opacity; to: 0; dur: 300; easing: easeOutQuad');
           
           this.el.sceneEl.appendChild(blast);
 
-          // Remove Blast and the Beaker after half a second
           setTimeout(() => { if (blast.parentNode) blast.parentNode.removeChild(blast); }, 300);
           if (this.el.parentNode) this.el.parentNode.removeChild(this.el);
         }
       });
 
-      // === SPAWNER ENGINE (Creates 32 Chemicals automatically) ===
+      // === SPAWNER ENGINE (Creates 32 Chemicals with Names automatically) ===
       AFRAME.registerComponent('chemical-spawner', {
         init: function () {
           const tableXPositions = [-4.5, -1.5, 1.5, 4.5];
           
-          // Library of chemicals with their types and colors
+          // Library of chemicals with Types, Names, and Colors
           const chemLibrary = [
-            { type: 'sodium', color: '#C0C0C0' }, // Silver
-            { type: 'water', color: '#00BFFF' },  // Light Blue
-            { type: 'acid', color: '#32CD32' },   // Green
-            { type: 'base', color: '#FF1493' },   // Deep Pink
-            { type: 'magic', color: '#8A2BE2' },  // Purple
-            { type: 'dye_red', color: '#FF0000' },
-            { type: 'dye_yellow', color: '#FFD700' },
-            { type: 'dye_cyan', color: '#00FFFF' }
+            { type: 'sodium', name: 'Sodium', color: '#C0C0C0' }, 
+            { type: 'water', name: 'Water', color: '#00BFFF' },  
+            { type: 'acid', name: 'Acid', color: '#32CD32' },   
+            { type: 'base', name: 'Base', color: '#FF1493' },   
+            { type: 'magic', name: 'Magic', color: '#8A2BE2' },  
+            { type: 'dye_red', name: 'Red Dye', color: '#FF0000' },
+            { type: 'dye_yellow', name: 'Yellow Dye', color: '#FFD700' },
+            { type: 'dye_cyan', name: 'Cyan Dye', color: '#00FFFF' }
           ];
 
           let count = 0;
 
-          // Loop over 4 tables
           for (let t = 0; t < 4; t++) {
             let tableCenterX = tableXPositions[t];
-            
-            // Loop 8 places on each table
-            let zOffsets = [-3.2, -2.8]; // Two rows
-            let xOffsets = [-0.6, -0.2, 0.2, 0.6]; // Four columns
+            let zOffsets = [-3.2, -2.8]; 
+            let xOffsets = [-0.6, -0.2, 0.2, 0.6]; 
 
             for(let row of zOffsets) {
               for(let col of xOffsets) {
@@ -124,7 +122,9 @@
                 beaker.setAttribute('position', `${tableCenterX + col} 1.3 ${row}`);
                 beaker.setAttribute('data-chem-type', chemData.type);
                 beaker.setAttribute('chemical-reaction', '');
+                beaker.setAttribute('class', 'chemical'); // Tagged for the raycaster
 
+                // The Liquid
                 let liquid = document.createElement('a-cylinder');
                 liquid.setAttribute('class', 'liquid');
                 liquid.setAttribute('position', '0 -0.05 0');
@@ -132,10 +132,19 @@
                 liquid.setAttribute('height', '0.2');
                 liquid.setAttribute('color', chemData.color);
                 liquid.setAttribute('opacity', '0.9');
-                
                 beaker.appendChild(liquid);
-                this.el.sceneEl.appendChild(beaker);
+
+                // The Text Label (Chemical Name)
+                let label = document.createElement('a-text');
+                label.setAttribute('value', chemData.name);
+                label.setAttribute('position', '0 0.25 0'); // Floating slightly above the beaker
+                label.setAttribute('align', 'center');
+                label.setAttribute('color', '#000000'); // Black text so it's readable
+                label.setAttribute('scale', '0.4 0.4 0.4');
+                label.setAttribute('side', 'double');
+                beaker.appendChild(label);
                 
+                this.el.sceneEl.appendChild(beaker);
                 count++;
               }
             }
@@ -146,14 +155,14 @@
   </head>
   
   <body>
-    <a-scene chemical-spawner physics="debug: false; gravity: -9.8" renderer="antialias: true; colorManagement: true;">
+    <a-scene chemical-spawner physics="debug: false; gravity: -5" renderer="antialias: true; colorManagement: true;">
       
       <a-assets>
         <a-mixin id="pro-beaker" 
                  geometry="primitive: cylinder; radius: 0.12; height: 0.3" 
                  material="color: #ffffff; opacity: 0.3; transparent: true; metalness: 0.8; roughness: 0.1" 
                  hoverable grabbable stretchable draggable droppable 
-                 dynamic-body="shape: cylinder; mass: 1" 
+                 dynamic-body="shape: cylinder; mass: 0.5; linearDamping: 0.5; angularDamping: 0.5" 
                  shadow="cast: true"></a-mixin>
       </a-assets>
 
@@ -174,10 +183,11 @@
 
       <a-entity id="rig" movement-controls kinematic-body position="0 0 0">
         <a-camera position="0 1.6 0" look-controls>
-          <a-cursor raycaster="objects: [hoverable]" color="#FFF"></a-cursor>
+          <a-entity cursor="rayOrigin: mouse" raycaster="objects: .chemical" super-hands></a-entity>
         </a-camera>
-        <a-entity sphere-collider="objects: [hoverable]" super-hands hand-controls="hand: left"></a-entity>
-        <a-entity sphere-collider="objects: [hoverable]" super-hands hand-controls="hand: right"></a-entity>
+        
+        <a-entity sphere-collider="objects: .chemical" super-hands hand-controls="hand: left" static-body="shape: sphere; sphereRadius: 0.05"></a-entity>
+        <a-entity sphere-collider="objects: .chemical" super-hands hand-controls="hand: right" static-body="shape: sphere; sphereRadius: 0.05"></a-entity>
       </a-entity>
       
     </a-scene>
