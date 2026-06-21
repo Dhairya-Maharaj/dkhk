@@ -1,27 +1,13 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Pro VR Chemistry Lab - Bug Fixed Edition</title>
+    <title>Pro VR Chemistry Lab - Absolute Fix</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.2/dist/aframe-physics-system.min.js"></script>
     <script src="https://unpkg.com/super-hands@3.0.4/dist/super-hands.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
 
     <script>
-      // === GRAB FIX ENGINE (Stops items from flying away) ===
-      AFRAME.registerComponent('grab-fix', {
-        init: function () {
-          this.el.addEventListener('grab-start', () => {
-            // Makes the item light as a feather while in hand so it doesn't fight the controller
-            this.el.setAttribute('dynamic-body', 'mass: 0.01');
-          });
-          this.el.addEventListener('grab-end', () => {
-            // Restores normal weight when dropped
-            this.el.setAttribute('dynamic-body', 'mass: 0.5');
-          });
-        }
-      });
-
       // === REACTION LOGIC ENGINE ===
       AFRAME.registerComponent('chemical-reaction', {
         init: function () {
@@ -38,6 +24,7 @@
             this.isReacting = true;
             otherEl.components['chemical-reaction'].isReacting = true;
 
+            // --- THE EXPERIMENTS ---
             // 1. Sodium + Water = EXPLOSION
             if ((myType === 'sodium' && otherType === 'water') || (otherType === 'sodium' && myType === 'water')) {
               this.triggerExplosion();
@@ -129,7 +116,6 @@
                 beaker.setAttribute('position', `${tableCenterX + col} 1.3 ${row}`);
                 beaker.setAttribute('data-chem-type', chemData.type);
                 beaker.setAttribute('chemical-reaction', '');
-                beaker.setAttribute('grab-fix', ''); // Applied the fix here!
                 beaker.setAttribute('class', 'chemical'); 
 
                 let liquid = document.createElement('a-cylinder');
@@ -168,7 +154,7 @@
                  geometry="primitive: cylinder; radius: 0.12; height: 0.3" 
                  material="color: #ffffff; opacity: 0.3; transparent: true; metalness: 0.8; roughness: 0.1" 
                  hoverable grabbable stretchable draggable droppable 
-                 dynamic-body="shape: cylinder; mass: 0.5; linearDamping: 0.5; angularDamping: 0.5" 
+                 dynamic-body="shape: cylinder; mass: 0.2; linearDamping: 0.6; angularDamping: 0.6" 
                  shadow="cast: true"></a-mixin>
       </a-assets>
 
@@ -192,8 +178,8 @@
           <a-entity cursor="rayOrigin: mouse" raycaster="objects: .chemical" super-hands></a-entity>
         </a-camera>
         
-        <a-entity sphere-collider="objects: .chemical; radius: 0.04" super-hands hand-controls="hand: left"></a-entity>
-        <a-entity sphere-collider="objects: .chemical; radius: 0.04" super-hands hand-controls="hand: right"></a-entity>
+        <a-entity sphere-collider="objects: .chemical; radius: 0.20" super-hands hand-controls="hand: left; handModelStyle: lowPoly;"></a-entity>
+        <a-entity sphere-collider="objects: .chemical; radius: 0.20" super-hands hand-controls="hand: right; handModelStyle: lowPoly;"></a-entity>
       </a-entity>
       
     </a-scene>
