@@ -1,498 +1,452 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>VR Chemistry Lab - Test Tube Mixer</title>
+<html>
+<head>
+<meta charset="utf-8">
+<title>VR Chemistry Lab</title>
 
-    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.2/dist/aframe-physics-system.min.js"></script>
-    <script src="https://unpkg.com/super-hands@3.0.4/dist/super-hands.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
+<script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.2/dist/aframe-physics-system.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/super-hands@5.0.4/dist/super-hands.min.js"></script>
 
-    <style>
-      html,
-      body {
-        width: 100%;
-        height: 100%;
-        margin: 0;
-        overflow: hidden;
-        background: #101820;
-      }
-    </style>
+<script>
 
-    <script>
-      const reactionNames = {
-        "acid+base": "Neutralized",
-        "sodium+water": "Flash Reaction",
-        "magic": "Rainbow Reaction"
-      };
+AFRAME.registerComponent('chemical-reaction', {
 
-      function worldPosition(el) {
-        const position = new THREE.Vector3();
-        el.object3D.getWorldPosition(position);
-        return position;
-      }
+init:function(){
 
-      function midpoint(a, b) {
-        return new THREE.Vector3(
-          (a.x + b.x) / 2,
-          (a.y + b.y) / 2,
-          (a.z + b.z) / 2
-        );
-      }
+this.cooldown=false;
 
-      function vectorToString(vector) {
-        return `${vector.x.toFixed(3)} ${vector.y.toFixed(3)} ${vector.z.toFixed(3)}`;
-      }
+},
 
-      function hexToRgb(hex) {
-        const clean = hex.replace("#", "");
-        const value = parseInt(clean.length === 3
-          ? clean.split("").map((part) => part + part).join("")
-          : clean, 16);
+tick:function(){
 
-        return {
-          r: (value >> 16) & 255,
-          g: (value >> 8) & 255,
-          b: value & 255
-        };
-      }
+if(this.cooldown) return;
 
-      function rgbToHex(rgb) {
-        return "#" + [rgb.r, rgb.g, rgb.b]
-          .map((value) => Math.max(0, Math.min(255, value)).toString(16).padStart(2, "0"))
-          .join("");
-      }
+const myType=this.el.getAttribute('data-type');
 
-      function mixColors(first, second) {
-        const a = hexToRgb(first);
-        const b = hexToRgb(second);
+let myPos=new THREE.Vector3();
+this.el.object3D.getWorldPosition(myPos);
 
-        return rgbToHex({
-          r: Math.round((a.r + b.r) / 2),
-          g: Math.round((a.g + b.g) / 2),
-          b: Math.round((a.b + b.b) / 2)
-        });
-      }
+let chemicals=document.querySelectorAll('.chemical');
 
-      function reactionPair(first, second) {
-        return [first, second].sort().join("+");
-      }
+for(let i=0;i<chemicals.length;i++){
 
-      AFRAME.registerComponent("face-camera", {
-        tick: function () {
-          const camera = this.el.sceneEl.camera;
-          if (!camera) return;
-          const cameraPosition = new THREE.Vector3();
-          camera.getWorldPosition(cameraPosition);
-          this.el.object3D.lookAt(cameraPosition);
-        }
-      });
+let other=chemicals[i];
 
-      AFRAME.registerComponent("reaction-effects", {
-        spawnFlash: function (position, color, label) {
-          const burst = document.createElement("a-entity");
-          burst.setAttribute("position", vectorToString(position));
+if(other===this.el) continue;
 
-          const core = document.createElement("a-sphere");
-          core.setAttribute("radius", "0.18");
-          core.setAttribute("material", `color: ${color}; emissive: ${color}; emissiveIntensity: 1.2; transparent: true; opacity: 0.85`);
-          core.setAttribute("animation__scale", "property: scale; to: 6 6 6; dur: 420; easing: easeOutQuad");
-          core.setAttribute("animation__fade", "property: material.opacity; to: 0; dur: 420; easing: easeOutQuad");
-          burst.appendChild(core);
+let otherPos=new THREE.Vector3();
+other.object3D.getWorldPosition(otherPos);
 
-          const light = document.createElement("a-light");
-          light.setAttribute("type", "point");
-          light.setAttribute("color", color);
-          light.setAttribute("intensity", "2.6");
-          light.setAttribute("distance", "6");
-          light.setAttribute("animation__fade", "property: intensity; to: 0; dur: 500; easing: easeOutQuad");
-          burst.appendChild(light);
+let dist=myPos.distanceTo(otherPos);
 
-          for (let index = 0; index < 24; index++) {
-            const spark = document.createElement("a-sphere");
-            const angle = Math.random() * Math.PI * 2;
-            const height = (Math.random() - 0.25) * 1.2;
-            const distance = 0.7 + Math.random() * 1.1;
-            const end = `${Math.cos(angle) * distance} ${height} ${Math.sin(angle) * distance}`;
+if(dist<0.18){
 
-            spark.setAttribute("radius", `${0.025 + Math.random() * 0.025}`);
-            spark.setAttribute("material", `color: ${color}; emissive: ${color}; emissiveIntensity: 0.9; transparent: true; opacity: 0.95`);
-            spark.setAttribute("animation__move", `property: position; to: ${end}; dur: 650; easing: easeOutQuad`);
-            spark.setAttribute("animation__fade", "property: material.opacity; to: 0; dur: 650; easing: easeOutQuad");
-            burst.appendChild(spark);
-          }
+const otherType=other.getAttribute('data-type');
 
-          this.el.appendChild(burst);
-          this.showLabel(position.clone().add(new THREE.Vector3(0, 0.85, 0)), label, color);
+if(
+(myType==="acid" && otherType==="base") ||
+(myType==="base" && otherType==="acid")
+){
 
-          setTimeout(() => {
-            if (burst.parentNode) burst.parentNode.removeChild(burst);
-          }, 720);
-        },
+this.neutralize(other);
 
-        showLabel: function (position, text, color) {
-          const label = document.createElement("a-text");
-          label.setAttribute("value", text);
-          label.setAttribute("align", "center");
-          label.setAttribute("color", color);
-          label.setAttribute("side", "double");
-          label.setAttribute("scale", "0.5 0.5 0.5");
-          label.setAttribute("position", vectorToString(position));
-          label.setAttribute("face-camera", "");
-          label.setAttribute("animation__float", "property: position; to: " + vectorToString(position.clone().add(new THREE.Vector3(0, 0.45, 0))) + "; dur: 900; easing: easeOutQuad");
-          label.setAttribute("animation__fade", "property: material.opacity; to: 0; dur: 900; easing: easeOutQuad");
+}
 
-          this.el.appendChild(label);
-          setTimeout(() => {
-            if (label.parentNode) label.parentNode.removeChild(label);
-          }, 960);
-        }
-      });
+else if(
+(myType==="sodium" && otherType==="water") ||
+(myType==="water" && otherType==="sodium")
+){
 
-      AFRAME.registerComponent("chemical-reaction", {
-        schema: {
-          type: { default: "" },
-          name: { default: "" },
-          color: { type: "color", default: "#ffffff" }
-        },
+this.explode(other);
 
-        init: function () {
-          this.coolingDown = false;
-          this.currentColor = this.data.color;
-          this.currentType = this.data.type;
-          this.currentName = this.data.name;
+}
 
-          this.el.setAttribute("data-chem-type", this.currentType);
-          this.el.setAttribute("data-chem-name", this.currentName);
-          this.el.setAttribute("data-current-color", this.currentColor);
+else if(
+(myType==="magic") ||
+(otherType==="magic")
+){
 
-          this.el.addEventListener("collide", (event) => this.handleCollision(event));
-          this.el.addEventListener("grab-start", () => this.el.setAttribute("material", "opacity", 0.42));
-          this.el.addEventListener("grab-end", () => this.el.setAttribute("material", "opacity", 0.26));
-        },
+this.rainbow(other);
 
-        handleCollision: function (event) {
-          const otherEl = event.detail.body && event.detail.body.el;
-          if (!otherEl || otherEl === this.el) return;
-          if (!otherEl.components || !otherEl.components["chemical-reaction"]) return;
+}
 
-          const other = otherEl.components["chemical-reaction"];
-          if (this.coolingDown || other.coolingDown) return;
+}
 
-          this.coolingDown = true;
-          other.coolingDown = true;
+}
 
-          const reactionCenter = midpoint(worldPosition(this.el), worldPosition(otherEl));
-          this.reactWith(other, reactionCenter);
+},
 
-          setTimeout(() => {
-            this.coolingDown = false;
-            other.coolingDown = false;
-          }, 1200);
-        },
+neutralize:function(other){
 
-        reactWith: function (other, reactionCenter) {
-          const scene = this.el.sceneEl;
-          const effects = scene.components["reaction-effects"];
-          const pair = reactionPair(this.currentType, other.currentType);
+this.cooldown=true;
 
-          if (pair === "sodium+water") {
-            this.setLiquid("#ff8a00", true, "Reaction");
-            other.setLiquid("#ff8a00", true, "Reaction");
-            effects.spawnFlash(reactionCenter, "#ff4b00", reactionNames[pair]);
-            this.updateBoard("Sodium + Water = flash, heat, orange glow");
-            return;
-          }
+let a=this.el.querySelector('.liquid');
+let b=other.querySelector('.liquid');
 
-          if (pair === "acid+base") {
-            this.setLiquid("#ffffff", true, "Neutral");
-            other.setLiquid("#ffffff", true, "Neutral");
-            effects.spawnFlash(reactionCenter, "#ffffff", reactionNames[pair]);
-            this.updateBoard("Acid + Base = neutral white glow");
-            return;
-          }
+if(a) a.setAttribute('color','#ffffff');
+if(b) b.setAttribute('color','#ffffff');
 
-          if (this.currentType === "magic" || other.currentType === "magic") {
-            this.makeRainbow();
-            other.makeRainbow();
-            effects.spawnFlash(reactionCenter, "#c55cff", reactionNames.magic);
-            this.updateBoard("Magic reagent = rainbow color cycle");
-            return;
-          }
+setTimeout(()=>{
+this.cooldown=false;
+},1000);
 
-          const mixedColor = mixColors(this.currentColor, other.currentColor);
-          this.setLiquid(mixedColor, false, "Mixed");
-          other.setLiquid(mixedColor, false, "Mixed");
-          effects.spawnFlash(reactionCenter, mixedColor, "Color Mix");
-          this.updateBoard(`${this.currentName} + ${other.currentName} = ${mixedColor}`);
-        },
+},
 
-        setLiquid: function (color, glow, name) {
-          this.currentColor = color;
-          this.currentName = name || this.currentName;
-          this.currentType = glow ? "reacted" : "mixed";
+rainbow:function(other){
 
-          this.el.setAttribute("data-chem-type", this.currentType);
-          this.el.setAttribute("data-chem-name", this.currentName);
-          this.el.setAttribute("data-current-color", this.currentColor);
+this.cooldown=true;
 
-          const liquidParts = this.el.querySelectorAll(".liquid-part");
-          liquidParts.forEach((part) => {
-            part.removeAttribute("animation__rainbow");
-            part.setAttribute("material", glow
-              ? `color: ${color}; emissive: ${color}; emissiveIntensity: 0.9; transparent: true; opacity: 0.9`
-              : `color: ${color}; emissive: ${color}; emissiveIntensity: 0.15; transparent: true; opacity: 0.88`);
-          });
+let a=this.el.querySelector('.liquid');
+let b=other.querySelector('.liquid');
 
-          const label = this.el.querySelector(".chem-label");
-          if (label) label.setAttribute("value", this.currentName);
-        },
+if(a){
 
-        makeRainbow: function () {
-          this.currentType = "magic";
-          this.currentName = "Rainbow";
-          this.el.setAttribute("data-chem-type", this.currentType);
-          this.el.setAttribute("data-chem-name", this.currentName);
+a.setAttribute(
+'animation__color',
+'property:material.color;dir:alternate;loop:true;dur:400;to:#ff00ff'
+);
 
-          const liquidParts = this.el.querySelectorAll(".liquid-part");
-          liquidParts.forEach((part) => {
-            part.setAttribute("material", "color: #ff00ff; emissive: #ff00ff; emissiveIntensity: 0.6; transparent: true; opacity: 0.9");
-            part.setAttribute("animation__rainbow", "property: components.material.material.color; type: color; from: #ff00ff; to: #00ffff; dir: alternate; dur: 450; loop: true");
-          });
+}
 
-          const label = this.el.querySelector(".chem-label");
-          if (label) label.setAttribute("value", "Rainbow");
-        },
+if(b){
 
-        updateBoard: function (message) {
-          const board = document.querySelector("#reactionBoardText");
-          if (board) board.setAttribute("value", message);
-        }
-      });
+b.setAttribute(
+'animation__color',
+'property:material.color;dir:alternate;loop:true;dur:400;to:#00ffff'
+);
 
-      AFRAME.registerComponent("test-tube-spawner", {
-        init: function () {
-          const chemicals = [
-            { type: "sodium", name: "Sodium", color: "#c9d1d9" },
-            { type: "water", name: "Water", color: "#27b4ff" },
-            { type: "acid", name: "Acid", color: "#38d16a" },
-            { type: "base", name: "Base", color: "#ff4dad" },
-            { type: "magic", name: "Magic", color: "#8f4cff" },
-            { type: "red", name: "Red Dye", color: "#ff2d2d" },
-            { type: "yellow", name: "Yellow Dye", color: "#ffd23f" },
-            { type: "cyan", name: "Cyan Dye", color: "#00e5ff" },
-            { type: "cobalt", name: "Cobalt", color: "#356dff" },
-            { type: "copper", name: "Copper", color: "#00c49a" },
-            { type: "iodine", name: "Iodine", color: "#7b3f98" },
-            { type: "indicator", name: "Indicator", color: "#f5a623" }
-          ];
+}
 
-          const rackPositions = [
-            { x: -2.9, z: -2.55 },
-            { x: 0, z: -2.55 },
-            { x: 2.9, z: -2.55 }
-          ];
+setTimeout(()=>{
+this.cooldown=false;
+},1000);
 
-          rackPositions.forEach((rack, rackIndex) => {
-            this.createRack(rack.x, rack.z);
+},
 
-            for (let i = 0; i < 4; i++) {
-              const chemical = chemicals[rackIndex * 4 + i];
-              const x = rack.x - 0.54 + i * 0.36;
-              this.createTestTube(chemical, x, 1.36, rack.z);
-            }
-          });
-        },
+explode:function(other){
 
-        createRack: function (x, z) {
-          const rack = document.createElement("a-entity");
-          rack.setAttribute("position", `${x} 1.03 ${z}`);
+this.cooldown=true;
 
-          const base = document.createElement("a-box");
-          base.setAttribute("width", "1.65");
-          base.setAttribute("height", "0.08");
-          base.setAttribute("depth", "0.38");
-          base.setAttribute("color", "#3f4652");
-          base.setAttribute("static-body", "");
-          rack.appendChild(base);
+let blast=document.createElement('a-sphere');
 
-          const backRail = document.createElement("a-box");
-          backRail.setAttribute("position", "0 0.25 -0.19");
-          backRail.setAttribute("width", "1.65");
-          backRail.setAttribute("height", "0.08");
-          backRail.setAttribute("depth", "0.05");
-          backRail.setAttribute("color", "#697484");
-          backRail.setAttribute("static-body", "");
-          rack.appendChild(backRail);
+blast.setAttribute(
+'position',
+this.el.getAttribute('position')
+);
 
-          const frontRail = document.createElement("a-box");
-          frontRail.setAttribute("position", "0 0.25 0.19");
-          frontRail.setAttribute("width", "1.65");
-          frontRail.setAttribute("height", "0.08");
-          frontRail.setAttribute("depth", "0.05");
-          frontRail.setAttribute("color", "#697484");
-          frontRail.setAttribute("static-body", "");
-          rack.appendChild(frontRail);
+blast.setAttribute(
+'radius',
+'0.1'
+);
 
-          this.el.appendChild(rack);
-        },
+blast.setAttribute(
+'color',
+'#ff5500'
+);
 
-        createTestTube: function (chemical, x, y, z) {
-          const tube = document.createElement("a-entity");
-          tube.setAttribute("id", `tube-${chemical.type}`);
-          tube.setAttribute("class", "chemical");
-          tube.setAttribute("position", `${x} ${y} ${z}`);
-          tube.setAttribute("geometry", "primitive: cylinder; radius: 0.08; height: 0.62; segmentsRadial: 32");
-          tube.setAttribute("material", "color: #eef8ff; transparent: true; opacity: 0.26; roughness: 0.03; metalness: 0.1");
-          tube.setAttribute("shadow", "cast: true; receive: false");
-          tube.setAttribute("hoverable", "");
-          tube.setAttribute("grabbable", "");
-          tube.setAttribute("draggable", "");
-          tube.setAttribute("droppable", "");
-          tube.setAttribute("stretchable", "");
-          tube.setAttribute("dynamic-body", "shape: cylinder; mass: 0.35; linearDamping: 0.45; angularDamping: 0.65");
-          tube.setAttribute("chemical-reaction", `type: ${chemical.type}; name: ${chemical.name}; color: ${chemical.color}`);
+blast.setAttribute(
+'material',
+'emissive:#ff0000;emissiveIntensity:1'
+);
 
-          const liquid = document.createElement("a-cylinder");
-          liquid.setAttribute("class", "liquid-part");
-          liquid.setAttribute("position", "0 -0.12 0");
-          liquid.setAttribute("radius", "0.061");
-          liquid.setAttribute("height", "0.34");
-          liquid.setAttribute("segments-radial", "32");
-          liquid.setAttribute("material", `color: ${chemical.color}; emissive: ${chemical.color}; emissiveIntensity: 0.15; transparent: true; opacity: 0.88`);
-          tube.appendChild(liquid);
+blast.setAttribute(
+'animation__grow',
+'property:scale;to:15 15 15;dur:400'
+);
 
-          const liquidSurface = document.createElement("a-cylinder");
-          liquidSurface.setAttribute("class", "liquid-part");
-          liquidSurface.setAttribute("position", "0 0.055 0");
-          liquidSurface.setAttribute("radius", "0.062");
-          liquidSurface.setAttribute("height", "0.012");
-          liquidSurface.setAttribute("segments-radial", "32");
-          liquidSurface.setAttribute("material", `color: ${chemical.color}; emissive: ${chemical.color}; emissiveIntensity: 0.25; transparent: true; opacity: 0.95`);
-          tube.appendChild(liquidSurface);
+blast.setAttribute(
+'animation__fade',
+'property:material.opacity;to:0;dur:400'
+);
 
-          const bottom = document.createElement("a-sphere");
-          bottom.setAttribute("position", "0 -0.31 0");
-          bottom.setAttribute("radius", "0.08");
-          bottom.setAttribute("scale", "1 0.48 1");
-          bottom.setAttribute("material", "color: #eef8ff; transparent: true; opacity: 0.22; roughness: 0.03; metalness: 0.1");
-          tube.appendChild(bottom);
+this.el.sceneEl.appendChild(blast);
 
-          const rim = document.createElement("a-torus");
-          rim.setAttribute("position", "0 0.315 0");
-          rim.setAttribute("rotation", "90 0 0");
-          rim.setAttribute("radius", "0.08");
-          rim.setAttribute("radius-tubular", "0.006");
-          rim.setAttribute("segments-radial", "16");
-          rim.setAttribute("segments-tubular", "48");
-          rim.setAttribute("material", "color: #ffffff; transparent: true; opacity: 0.58; metalness: 0.15; roughness: 0.02");
-          tube.appendChild(rim);
+setTimeout(()=>{
 
-          const label = document.createElement("a-text");
-          label.setAttribute("class", "chem-label");
-          label.setAttribute("value", chemical.name);
-          label.setAttribute("position", "0 0.5 0");
-          label.setAttribute("align", "center");
-          label.setAttribute("color", "#14202b");
-          label.setAttribute("side", "double");
-          label.setAttribute("scale", "0.28 0.28 0.28");
-          label.setAttribute("face-camera", "");
-          tube.appendChild(label);
+if(blast.parentNode){
+blast.parentNode.removeChild(blast);
+}
 
-          this.el.appendChild(tube);
-        }
-      });
-    </script>
-  </head>
+},450);
 
-  <body>
-    <a-scene
-      test-tube-spawner
-      reaction-effects
-      physics="debug: false; gravity: -9.8"
-      renderer="antialias: true; colorManagement: true; physicallyCorrectLights: true"
-      webxr="optionalFeatures: local-floor, bounded-floor, hand-tracking"
-      vr-mode-ui="enabled: true">
+if(other.parentNode){
+other.parentNode.removeChild(other);
+}
 
-      <a-sky color="#d7ecff"></a-sky>
+if(this.el.parentNode){
+this.el.parentNode.removeChild(this.el);
+}
 
-      <a-plane
-        position="0 0 0"
+}
+
+});
+
+AFRAME.registerComponent('spawn-chemicals',{
+
+init:function(){
+
+const chemicals=[
+
+{
+name:'Acid',
+type:'acid',
+color:'#32cd32'
+},
+
+{
+name:'Base',
+type:'base',
+color:'#ff1493'
+},
+
+{
+name:'Water',
+type:'water',
+color:'#00bfff'
+},
+
+{
+name:'Sodium',
+type:'sodium',
+color:'#c0c0c0'
+},
+
+{
+name:'Magic',
+type:'magic',
+color:'#8a2be2'
+},
+
+{
+name:'Red Dye',
+type:'red',
+color:'#ff0000'
+},
+
+{
+name:'Yellow Dye',
+type:'yellow',
+color:'#ffd700'
+},
+
+{
+name:'Cyan Dye',
+type:'cyan',
+color:'#00ffff'
+}
+
+];
+
+for(let i=0;i<chemicals.length;i++){
+
+let chem=chemicals[i];
+
+let beaker=document.createElement('a-entity');
+
+beaker.setAttribute(
+'position',
+`${-2.5+(i*0.7)} 1.2 -3`
+);
+
+beaker.setAttribute(
+'class',
+'chemical'
+);
+
+beaker.setAttribute(
+'data-type',
+chem.type
+);
+
+beaker.setAttribute(
+'grabbable',
+''
+);
+
+beaker.setAttribute(
+'dynamic-body',
+'mass:0.2'
+);
+
+beaker.setAttribute(
+'chemical-reaction',
+''
+);
+
+let glass=document.createElement('a-cylinder');
+
+glass.setAttribute('radius','0.12');
+glass.setAttribute('height','0.3');
+glass.setAttribute(
+'material',
+'color:white;opacity:0.3;transparent:true'
+);
+
+beaker.appendChild(glass);
+
+let liquid=document.createElement('a-cylinder');
+
+liquid.setAttribute(
+'class',
+'liquid'
+);
+
+liquid.setAttribute(
+'position',
+'0 -0.05 0'
+);
+
+liquid.setAttribute(
+'radius',
+'0.11'
+);
+
+liquid.setAttribute(
+'height',
+'0.2'
+);
+
+liquid.setAttribute(
+'color',
+chem.color
+);
+
+beaker.appendChild(liquid);
+
+let text=document.createElement('a-text');
+
+text.setAttribute(
+'value',
+chem.name
+);
+
+text.setAttribute(
+'position',
+'0 0.25 0'
+);
+
+text.setAttribute(
+'align',
+'center'
+);
+
+text.setAttribute(
+'color',
+'black'
+);
+
+text.setAttribute(
+'scale',
+'0.4 0.4 0.4'
+);
+
+beaker.appendChild(text);
+
+this.el.sceneEl.appendChild(beaker);
+
+}
+
+}
+
+});</script>
+</head>
+
+<body>
+
+<a-scene
+ physics="gravity:-9.8"
+ renderer="antialias:true"
+ spawn-chemicals>
+
+    <!-- Floor -->
+
+    <a-plane
         rotation="-90 0 0"
-        width="12"
-        height="12"
-        color="#b8c5cf"
-        roughness="0.85"
-        shadow="receive: true"
-        static-body></a-plane>
+        width="20"
+        height="20"
+        color="#B0BEC5"
+        static-body>
+    </a-plane>
 
-      <a-plane position="0 2.5 -5.8" width="12" height="5" color="#f3f7fb" static-body></a-plane>
-      <a-plane position="-6 2.5 0" rotation="0 90 0" width="12" height="5" color="#e4edf5" static-body></a-plane>
-      <a-plane position="6 2.5 0" rotation="0 -90 0" width="12" height="5" color="#e4edf5" static-body></a-plane>
+    <!-- Back Wall -->
 
-      <a-box
-        position="0 0.52 -2.55"
-        width="7.9"
-        height="1.04"
-        depth="1.35"
-        color="#1f2933"
-        roughness="0.55"
-        shadow="cast: true; receive: true"
-        static-body></a-box>
+    <a-plane
+        position="0 3 -8"
+        width="20"
+        height="6"
+        color="#d9f0ff">
+    </a-plane>
 
-      <a-box
-        position="0 1.07 -2.55"
-        width="8.15"
-        height="0.12"
-        depth="1.55"
-        color="#51606f"
-        roughness="0.4"
-        shadow="cast: true; receive: true"
-        static-body></a-box>
+    <!-- Left Wall -->
 
-      <a-entity position="0 1.9 -5.72">
-        <a-plane width="4.1" height="0.74" color="#203040" opacity="0.92"></a-plane>
-        <a-text
-          id="reactionBoardText"
-          value="Reaction board ready"
-          position="0 0 0.02"
-          align="center"
-          color="#e9f5ff"
-          width="3.7"></a-text>
-      </a-entity>
+    <a-plane
+        position="-10 3 0"
+        rotation="0 90 0"
+        width="16"
+        height="6"
+        color="#d9f0ff">
+    </a-plane>
 
-      <a-entity light="type: ambient; color: #ffffff; intensity: 0.56"></a-entity>
-      <a-entity light="type: directional; color: #ffffff; intensity: 0.72" position="-2 5 3"></a-entity>
-      <a-entity light="type: point; color: #b9e4ff; intensity: 0.75; distance: 9" position="2.4 2.8 -1.2"></a-entity>
+    <!-- Right Wall -->
 
-      <a-entity id="rig" movement-controls="fly: false" kinematic-body position="0 0 1.9">
-        <a-camera position="0 1.6 0" look-controls wasd-controls>
-          <a-entity
-            cursor="rayOrigin: mouse; fuse: false"
-            raycaster="objects: .chemical; far: 8"
-            super-hands></a-entity>
+    <a-plane
+        position="10 3 0"
+        rotation="0 -90 0"
+        width="16"
+        height="6"
+        color="#d9f0ff">
+    </a-plane>
+
+    <!-- Lab Table -->
+
+    <a-box
+        position="0 0.5 -3"
+        width="8"
+        height="1"
+        depth="2"
+        color="#222222"
+        static-body>
+    </a-box>
+
+    <!-- Lights -->
+
+    <a-entity
+        light="type:ambient;intensity:0.8">
+    </a-entity>
+
+    <a-entity
+        light="type:point;
+               intensity:1.2;
+               distance:30"
+        position="0 5 -2">
+    </a-entity>
+
+    <!-- Player Rig -->
+
+    <a-entity id="rig" position="0 0 0">
+
+        <a-camera position="0 1.6 0">
         </a-camera>
 
-        <a-entity
-          id="leftHand"
-          hand-controls="hand: left; handModelStyle: lowPoly; color: #2a9df4"
-          laser-controls="hand: left"
-          raycaster="objects: .chemical; far: 4"
-          line="color: #29d7ff; opacity: 0.75"
-          sphere-collider="objects: .chemical; radius: 0.13"
-          super-hands></a-entity>
+        <!-- LEFT HAND -->
 
         <a-entity
-          id="rightHand"
-          hand-controls="hand: right; handModelStyle: lowPoly; color: #f06a86"
-          laser-controls="hand: right"
-          raycaster="objects: .chemical; far: 4"
-          line="color: #ff7a94; opacity: 0.75"
-          sphere-collider="objects: .chemical; radius: 0.13"
-          super-hands></a-entity>
-      </a-entity>
-    </a-scene>
-  </body>
+            hand-controls="hand:left"
+            super-hands>
+        </a-entity>
+
+        <!-- RIGHT HAND -->
+
+        <a-entity
+            hand-controls="hand:right"
+            super-hands>
+        </a-entity>
+
+    </a-entity>
+
+</a-scene>
+
+</body>
 </html>
